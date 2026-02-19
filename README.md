@@ -110,6 +110,73 @@ A Streamlit app that optimizes prompts for coding agents and AI research using m
 - **Token Estimates**: Approximate only (words + chars/4 formula)
   - **Note**: Actual tokenization varies by model; estimates are for comparison purposes
 
+## 🔧 Troubleshooting
+
+### Rate Limit Errors
+
+**Symptoms**: 
+- "Rate limit hit" messages in logs
+- Optimizations fail or timeout
+- "429 Too Many Requests" errors
+
+**Solutions**:
+1. **Use the 8B model**: Switch to `llama-3.1-8b-instant` in the sidebar (lower rate limits)
+2. **Wait and retry**: The app automatically retries with exponential backoff (15s, 30s, 60s, 120s)
+3. **Reduce parallel calls**: The app batches optimizers (2 at a time) with 2-second delays to avoid bursts
+4. **Check Groq dashboard**: Visit [console.groq.com](https://console.groq.com) to monitor your TPM usage
+
+**Prevention**:
+- Use `llama-3.1-8b-instant` for testing/development
+- Wait a few minutes between large optimization runs
+- Consider upgrading to Groq Pro tier for higher limits if needed
+
+### JSON Parsing Errors
+
+**Symptoms**:
+- Judge returns "Unknown" winner
+- Scores show default values (6/10)
+- Error messages about JSON parsing
+
+**Solutions**:
+1. **Automatic handling**: The app automatically strips markdown code fences (```json) and fixes trailing commas
+2. **Retry**: Click "Optimize Now" again - LLM responses vary, next attempt may succeed
+3. **Check logs**: If using local deployment, check console for JSON parse warnings
+
+**Technical Details**:
+- The `_safe_json_parse` function handles:
+  - Markdown code block removal
+  - Trailing comma fixes
+  - Single-to-double quote conversion
+  - Fallback to default scores if parsing fails
+
+### API Key Issues
+
+**Symptoms**:
+- "Missing GROQ_API_KEY" error
+- App stops immediately after loading
+
+**Solutions**:
+1. **Local setup**: Create `.streamlit/secrets.toml`:
+   ```toml
+   GROQ_API_KEY = "your_key_here"
+   ```
+2. **Streamlit Cloud**: Add secret in app settings → Secrets
+3. **Verify key**: Use the "🔌 Test Groq Connection" button in the sidebar
+4. **Get new key**: Visit [console.groq.com](https://console.groq.com) if key is invalid
+
+### Other Issues
+
+**App won't start**:
+- Check Python version: `python --version` (needs 3.8+)
+- Reinstall dependencies: `pip install -r requirements.txt --upgrade`
+- Check Streamlit version: `streamlit --version` (should be 1.31.1)
+
+**Optimizations return "Error:" messages**:
+- Check API key is valid
+- Verify model name is correct (should auto-format as `groq/llama-3.1-8b-instant`)
+- Check internet connection
+- Review error message for specific issue
+
 ## 📊 How It Works
 
 1. **Input**: User pastes raw prompt
