@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 import re
 from typing import Any
 
 import litellm
+
+logger = logging.getLogger(__name__)
 
 try:
     from litellm import RateLimitError
@@ -65,8 +68,13 @@ def _safe_json_parse(raw_text: str) -> dict[str, Any] | None:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"JSON parse error: {e} — cleaned snippet: {cleaned[:200]}...")
-        pass
+        logger.debug(
+            "JSON parse error (%s): %s at pos=%s, cleaned_length=%s",
+            type(e).__name__,
+            str(e),
+            getattr(e, "pos", None),
+            len(cleaned),
+        )
 
     try:
         return json.loads(cleaned.replace("'", '"'))
