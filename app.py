@@ -4,7 +4,7 @@ from typing import Dict
 
 import streamlit as st
 import litellm
-from backend import run_optimizers, get_winner_and_scores, get_fusion
+from backend import run_optimizers, get_winner_and_scores, get_fusion, estimate_tokens
 from litellm import completion
 
 st.set_page_config(
@@ -28,10 +28,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
-def estimate_tokens(text: str) -> int:
-    return len(text.split()) + len(text) // 4
 
 
 def get_secret_api_key() -> str:
@@ -88,14 +84,13 @@ with st.sidebar:
         st.session_state["groq_key"] = ""
 
     model_options = [
-        "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "llama3-70b-8192",
+        "llama-3.3-70b-versatile",
     ]
     selected_model = st.selectbox(
         "Choose model",
         model_options,
-        index=1,
+        index=0,
         help="Choose faster 8B for testing, 70B for best quality.",
     )
     full_model = f"groq/{selected_model}"
@@ -149,7 +144,8 @@ raw_prompt = st.text_area(
 if raw_prompt:
     word_count = len(raw_prompt.split())
     char_count = len(raw_prompt)
-    st.caption(f"Words: {word_count} | Characters: {char_count}")
+    tok_est = estimate_tokens(raw_prompt)
+    st.caption(f"Words: {word_count} | Characters: {char_count} | ~{tok_est} tokens")
 
 if st.button("Optimize Now", type="primary"):
     if raw_prompt.strip():
@@ -185,8 +181,13 @@ if st.button("Optimize Now", type="primary"):
                 st.subheader(f"🥇 Winner: {winner} (Score: {winner_score}/10)")
                 st.code(results.get(winner, "No winner output available."), language="markdown")
 
-                try:
-                    fused = asyncio.run(get_fusion(results, full_model, api_key))
+                fused = asyncio.run(get_fusion(results, full_model, api_key))
+                if fused.startswith("Error:"):
+                    if "retries" in fused.lower():
+                        st.info("Fusion skipped after rate limit retries — winner is already strong!")
+                    else:
+                        st.warning(f"Fusion skipped: {fused}")
+                else:
                     st.subheader("🌟 Fusion Version (Best Combined)")
                     st.code(fused, language="markdown")
                     original_tokens = estimate_tokens(raw_prompt)
@@ -204,8 +205,6 @@ if st.button("Optimize Now", type="primary"):
                         file_name="fusion_prompt.md",
                         mime="text/markdown",
                     )
-                except litellm.RateLimitError:
-                    st.info("Fusion skipped due to rate limit — winner is already strong!")
 
                 st.success("Optimization complete!")
             except Exception as e:

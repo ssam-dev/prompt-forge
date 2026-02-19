@@ -1,2 +1,2 @@
 streamlit
-litellm
+litellm>=1.28.0

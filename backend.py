@@ -27,6 +27,7 @@ async def safe_completion(**kwargs):
         except RateLimitError as exc:
             last_error = exc
             wait_seconds = 15 * (2**attempt)
+            print(f"Rate limit hit — retry {attempt + 1}/4 in {wait_seconds}s")
             await asyncio.sleep(wait_seconds)
             continue
         except Exception as exc:
@@ -35,6 +36,7 @@ async def safe_completion(**kwargs):
             if is_rate_limited and attempt < 3:
                 last_error = exc
                 wait_seconds = 15 * (2**attempt)
+                print(f"Rate limit (429) hit — retry {attempt + 1}/4 in {wait_seconds}s")
                 await asyncio.sleep(wait_seconds)
                 continue
             raise
@@ -62,12 +64,14 @@ def _safe_json_parse(raw_text: str) -> dict[str, Any] | None:
 
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e} — cleaned snippet: {cleaned[:200]}...")
         pass
 
     try:
         return json.loads(cleaned.replace("'", '"'))
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON parse fallback failed: {e}")
         return None
 
 
@@ -97,9 +101,9 @@ STRUCTURED_SYSTEM = (
 def estimate_tokens(text: str) -> int:
     """
     Roughly estimate token count from text length.
-    Approximation: ~1.3 tokens per word.
+    Approximation: words + chars/4 (consistent with typical tokenizers).
     """
-    return int(len(text.split()) * 1.3)
+    return len(text.split()) + len(text) // 4
 
 
 async def _optimize_prompt(
