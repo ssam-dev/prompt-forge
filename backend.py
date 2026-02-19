@@ -22,7 +22,7 @@ def _normalize_groq_model(model: str) -> str:
     return f"groq/{model_name}"
 
 
-async def safe_completion(**kwargs):
+async def safe_acompletion(**kwargs):
     last_error: Exception | None = None
     for attempt in range(4):
         try:
@@ -30,7 +30,7 @@ async def safe_completion(**kwargs):
         except RateLimitError as exc:
             last_error = exc
             wait_seconds = 15 * (2**attempt)
-            print(f"Rate limit hit — retry {attempt + 1}/4 in {wait_seconds}s")
+            logger.warning(f"Rate limit hit — retry {attempt + 1}/4 in {wait_seconds}s")
             await asyncio.sleep(wait_seconds)
             continue
         except Exception as exc:
@@ -39,7 +39,7 @@ async def safe_completion(**kwargs):
             if is_rate_limited and attempt < 3:
                 last_error = exc
                 wait_seconds = 15 * (2**attempt)
-                print(f"Rate limit (429) hit — retry {attempt + 1}/4 in {wait_seconds}s")
+                logger.warning(f"Rate limit (429) hit — retry {attempt + 1}/4 in {wait_seconds}s")
                 await asyncio.sleep(wait_seconds)
                 continue
             raise
@@ -79,7 +79,7 @@ def _safe_json_parse(raw_text: str) -> dict[str, Any] | None:
     try:
         return json.loads(cleaned.replace("'", '"'))
     except json.JSONDecodeError as e:
-        print(f"JSON parse fallback failed: {e}")
+        logger.warning(f"JSON parse fallback failed: {e}")
         return None
 
 
@@ -122,7 +122,7 @@ async def _optimize_prompt(
     Returns an error string if the call fails.
     """
     try:
-        response = await safe_completion(
+        response = await safe_acompletion(
             model=_normalize_groq_model(model),
             api_key=api_key,
             messages=[
@@ -204,7 +204,7 @@ async def get_winner_and_scores(
     )
 
     try:
-        response = await safe_completion(
+        response = await safe_acompletion(
             model=_normalize_groq_model(model),
             api_key=api_key,
             messages=[
@@ -266,7 +266,7 @@ async def get_fusion(
     )
 
     try:
-        response = await safe_completion(
+        response = await safe_acompletion(
             model=_normalize_groq_model(model),
             api_key=api_key,
             messages=[

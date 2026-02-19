@@ -1,5 +1,4 @@
 import asyncio
-import os
 from typing import Dict
 
 import streamlit as st
@@ -30,21 +29,12 @@ st.markdown(
 )
 
 
-def get_secret_api_key() -> str:
+def get_api_key() -> str:
+    """Get API key from Streamlit secrets only. Returns empty string if not found."""
     try:
-        return st.secrets.get("GROQ_API_KEY", "")
-    except Exception:
+        return st.secrets["GROQ_API_KEY"]
+    except (KeyError, AttributeError):
         return ""
-
-
-def get_server_api_key() -> str:
-    secret_key = get_secret_api_key()
-    if secret_key:
-        return secret_key
-    env_key = os.getenv("GROQ_API_KEY", "")
-    if env_key:
-        return env_key
-    return st.session_state.get("groq_key", "")
 
 def groq_health_check(model: str, api_key: str) -> Dict[str, str]:
     """Optional litellm Groq ping to verify key/model wiring. Not required for placeholders."""
@@ -80,9 +70,6 @@ with st.sidebar:
     st.header("⚙️ Settings")
     st.markdown("&nbsp;", unsafe_allow_html=True)
 
-    if "groq_key" not in st.session_state:
-        st.session_state["groq_key"] = ""
-
     model_options = [
         "llama-3.1-8b-instant",
         "llama-3.3-70b-versatile",
@@ -104,36 +91,25 @@ with st.sidebar:
         help="Coding Agent = strict format & JSON, AI Research = hypothesis & metrics.",
     )
 
-    secret_key = get_secret_api_key()
-    if not secret_key:
-        st.text_input(
-            "Enter GROQ_API_KEY (local dev only)",
-            type="password",
-            placeholder="gsk_...",
-            help="Insecure for production. Prefer Streamlit secrets.",
-            key="groq_key",
-        )
-        if st.session_state.get("groq_key", ""):
-            st.warning("Using session key for local dev. Use Streamlit secrets for production.")
-
-    active_key = get_server_api_key()
-
-    if not active_key:
+    api_key = get_api_key()
+    if not api_key:
         st.error(
-            "Missing GROQ_API_KEY — add it in `.streamlit/secrets.toml`, set OS env var `GROQ_API_KEY`, "
-            "or enter it in the sidebar (local dev only)."
+            "❌ Missing GROQ_API_KEY — add it to `.streamlit/secrets.toml`:\n\n"
+            "```toml\nGROQ_API_KEY = \"your_groq_key_here\"\n```\n\n"
+            "Get a free key at [console.groq.com](https://console.groq.com)"
         )
+        st.stop()
 
     st.divider()
     if st.button("🔌 Test Groq Connection"):
         with st.spinner("Checking Groq via litellm..."):
-            health = groq_health_check(model=full_model, api_key=active_key)
+            health = groq_health_check(model=full_model, api_key=api_key)
         if health["status"] == "ok":
-            st.success(f"Connected: {health['message']}")
+            st.success(f"✅ Connected: {health['message']}")
         elif health["status"] == "skipped":
             st.info(health["message"])
         else:
-            st.error(f"Connection failed: {health['message']}")
+            st.error(f"❌ Connection failed: {health['message']}")
 
 st.subheader("📝 Raw Prompt Input")
 raw_prompt = st.text_area(
@@ -150,11 +126,11 @@ if raw_prompt:
 if st.button("Optimize Now", type="primary"):
     if raw_prompt.strip():
         with st.spinner("Optimizing with Groq (parallel calls)..."):
-            api_key = get_server_api_key()
+            api_key = get_api_key()
             if not api_key:
                 st.error(
-                    "No GROQ_API_KEY found. Add it to `.streamlit/secrets.toml`, set OS env var `GROQ_API_KEY`, "
-                    "or enter it in the sidebar (local dev only)."
+                    "❌ Missing GROQ_API_KEY — add it to `.streamlit/secrets.toml`:\n\n"
+                    "```toml\nGROQ_API_KEY = \"your_groq_key_here\"\n```"
                 )
                 st.stop()
 
