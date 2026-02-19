@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Dict
 
 import streamlit as st
@@ -33,10 +34,20 @@ def estimate_tokens(text: str) -> int:
     return len(text.split()) + len(text) // 4
 
 
+def get_secret_api_key() -> str:
+    try:
+        return st.secrets.get("GROQ_API_KEY", "")
+    except Exception:
+        return ""
+
+
 def get_server_api_key() -> str:
-    secret_key = st.secrets.get("GROQ_API_KEY", "")
+    secret_key = get_secret_api_key()
     if secret_key:
         return secret_key
+    env_key = os.getenv("GROQ_API_KEY", "")
+    if env_key:
+        return env_key
     return st.session_state.get("groq_key", "")
 
 def groq_health_check(model: str, api_key: str) -> Dict[str, str]:
@@ -98,7 +109,7 @@ with st.sidebar:
         help="Coding Agent = strict format & JSON, AI Research = hypothesis & metrics.",
     )
 
-    secret_key = st.secrets.get("GROQ_API_KEY", "")
+    secret_key = get_secret_api_key()
     if not secret_key:
         st.text_input(
             "Enter GROQ_API_KEY (local dev only)",
@@ -110,10 +121,13 @@ with st.sidebar:
         if st.session_state.get("groq_key", ""):
             st.warning("Using session key for local dev. Use Streamlit secrets for production.")
 
-    active_key = secret_key or st.session_state.get("groq_key", "")
+    active_key = get_server_api_key()
 
     if not active_key:
-        st.error("Missing GROQ_API_KEY — add it to Streamlit secrets or local .streamlit/secrets.toml")
+        st.error(
+            "Missing GROQ_API_KEY — add it in `.streamlit/secrets.toml`, set OS env var `GROQ_API_KEY`, "
+            "or enter it in the sidebar (local dev only)."
+        )
 
     st.divider()
     if st.button("🔌 Test Groq Connection"):
@@ -142,7 +156,10 @@ if st.button("Optimize Now", type="primary"):
         with st.spinner("Optimizing with Groq (parallel calls)..."):
             api_key = get_server_api_key()
             if not api_key:
-                st.error("No GROQ_API_KEY found. Set it in Streamlit secrets management.")
+                st.error(
+                    "No GROQ_API_KEY found. Add it to `.streamlit/secrets.toml`, set OS env var `GROQ_API_KEY`, "
+                    "or enter it in the sidebar (local dev only)."
+                )
                 st.stop()
 
             try:
