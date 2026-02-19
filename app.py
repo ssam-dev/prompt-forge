@@ -1,15 +1,10 @@
-import os
 import asyncio
 from typing import Dict
 
 import streamlit as st
 import litellm
 from backend import run_optimizers, get_winner_and_scores, get_fusion
-from dotenv import load_dotenv
 from litellm import completion
-
-
-load_dotenv()
 
 st.set_page_config(
     page_title="PromptForge Aggregator - Free Student Edition",
@@ -36,6 +31,13 @@ st.markdown(
 
 def estimate_tokens(text: str) -> int:
     return len(text.split()) + len(text) // 4
+
+
+def get_server_api_key() -> str:
+    secret_key = st.secrets.get("GROQ_API_KEY", "")
+    if secret_key:
+        return secret_key
+    return st.session_state.get("groq_key", "")
 
 def groq_health_check(model: str, api_key: str) -> Dict[str, str]:
     """Optional litellm Groq ping to verify key/model wiring. Not required for placeholders."""
@@ -96,20 +98,22 @@ with st.sidebar:
         help="Coding Agent = strict format & JSON, AI Research = hypothesis & metrics.",
     )
 
-    env_key = os.getenv("GROQ_API_KEY", "")
-
-    if env_key:
-        st.success("✅ GROQ_API_KEY loaded from .env")
-    else:
+    secret_key = st.secrets.get("GROQ_API_KEY", "")
+    if not secret_key:
         st.text_input(
-            "Enter GROQ_API_KEY",
+            "Enter GROQ_API_KEY (local dev only)",
             type="password",
             placeholder="gsk_...",
-            help="Used only for this session if .env key is not set.",
+            help="Insecure for production. Prefer Streamlit secrets.",
             key="groq_key",
         )
+        if st.session_state.get("groq_key", ""):
+            st.warning("Using session key for local dev. Use Streamlit secrets for production.")
 
-    active_key = env_key or st.session_state.get("groq_key", "")
+    active_key = secret_key or st.session_state.get("groq_key", "")
+
+    if not active_key:
+        st.error("Missing GROQ_API_KEY — add it to Streamlit secrets or local .streamlit/secrets.toml")
 
     st.divider()
     if st.button("🔌 Test Groq Connection"):
@@ -136,13 +140,13 @@ if raw_prompt:
 if st.button("Optimize Now", type="primary"):
     if raw_prompt.strip():
         with st.spinner("Optimizing with Groq (parallel calls)..."):
-            api_key = os.getenv("GROQ_API_KEY") or st.session_state.get("groq_key", "")
+            api_key = get_server_api_key()
             if not api_key:
-                st.error("No Groq API key found. Add to .env or sidebar.")
+                st.error("No GROQ_API_KEY found. Set it in Streamlit secrets management.")
                 st.stop()
 
             try:
-                st.write(f"Calling model: {full_model}")
+                # API key is NEVER sent to client — all Groq calls are server-side via LiteLLM
                 results = asyncio.run(run_optimizers(raw_prompt, mode, full_model, api_key))
 
                 st.subheader("🎯 Optimized Prompt Variants")
